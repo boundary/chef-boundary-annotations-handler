@@ -10,8 +10,11 @@ Append the following to your Chef client configs, usually at `/etc/chef/client.r
     require 'chef-boundary-annotations-handler'
     # require '/path/to/chef-boundary-annotations-handler'
 
+    # github account information for creating a gist of the exception
     github_user = "foobar"
     github_token = "asdfadsf"
+
+    # boundary account information for creating the annotation
     boundary_orgid = "v9dnd9dm"
     boundary_apikey = "cs3odm93nd"
 
