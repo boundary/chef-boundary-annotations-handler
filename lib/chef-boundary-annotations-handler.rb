@@ -23,7 +23,7 @@ class BoundaryAnnotations < Chef::Handler
     run_status.node.run_list.map {|r| r.type == :role ? r.name : r.to_s }.join(', ')
   end
 
-  def fmt_gist
+  def fmt_fail_gist
     ([ "run_status.node: #{run_status.node.name} (#{run_status.node.ipaddress})",
        "Run list: #{run_status.node.run_list}",
        "All roles: #{run_status.node.roles.join(', ')}",
@@ -33,27 +33,56 @@ class BoundaryAnnotations < Chef::Handler
      Array(backtrace)).join("\n")
   end
 
+  def fmt_success_gist
+    [ "run_status.node: #{run_status.node.name} (#{run_status.node.ipaddress})",
+      "Run list: #{run_status.node.run_list}",
+      "All roles: #{run_status.node.roles.join(', ')}",
+      "",
+      "Changes made:",
+      "#{run_status.updated_resources.join("\n")}",
+      ""].join("\n")
+  end
+
   def report
 
-    Chef::Log.error("Chef run failed @ #{run_status.end_time}, creating Boundary Annotation")
-    Chef::Log.error("#{run_status.formatted_exception}")
+    if run_status.success?
+      if run_status.updated_resources.length.to_i > 0
+        tags = ["chef", "success"]
 
-    gist_id = create_gist()
-    annotation_url = create_annotation(gist_id)
+        gist = fmt_success_gist
+
+        Chef::Log.info("Chef run suceeded with #{run_status.updated_resources.length.to_i} changes @ #{run_status.end_time}, creating Boundary Annotation")
+
+        gist_id = create_gist(gist, "succeeded")
+        annotation_url = create_annotation(gist_id, tags, "Chef")
+      end
+    end
+
+    if run_status.failed?
+      tags = ["chef", "failure", "exception", run_status.exception]
+
+      gist = fmt_fail_gist
+
+      Chef::Log.error("Chef run failed @ #{run_status.end_time}, creating Boundary Annotation")
+      Chef::Log.error("#{run_status.formatted_exception}")
+
+      gist_id = create_gist(gist, "failed")
+      annotation_url = create_annotation(gist_id, tags, "Chef Exception")
+    end
 
   end
 
-  def create_gist
+  def create_gist(gist, type)
     gist_id = nil
     begin
       timeout(10) do
         url = "http://gist.github.com/api/v1/json/new"
 
         res = Net::HTTP.post_form(URI.parse(url), {
-          "files[#{run_status.node.name}-#{run_status.end_time.to_i.to_s}]" => fmt_gist,
+          "files[#{run_status.node.name}-#{run_status.end_time.to_i.to_s}]" => gist,
           "login" => @github_user,
           "token" => @github_token,
-          "description" => "Chef run failed on #{run_status.node.name} @ #{run_status.end_time}",
+          "description" => "Chef run #{type} on #{run_status.node.name} @ #{run_status.end_time}",
           "public" => false
         })
 
@@ -68,19 +97,19 @@ class BoundaryAnnotations < Chef::Handler
     end
   end
 
-  def create_annotation(gist_id)
+  def create_annotation(gist_id, tags, type)
     auth = auth_encode("#{@boundary_apikey}:")
     headers = {"Authorization" => "Basic #{auth}", "Content-Type" => "application/json"}
 
     annotation = {
-      :type => "Chef Exception",
+      :type => type,
       :subtype => run_status.node.name,
       :start_time => run_status.start_time.to_i,
       :end_time => run_status.end_time.to_i,
-      :tags => ["chef", "failure", "exception", run_status.exception],
+      :tags => tags,
       :links => [
         {
-         "rel" => "exception",
+         "rel" => "output",
          "href" => "https://gist.github.com/#{gist_id}",
          "note" => "gist"
         }
