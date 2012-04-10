@@ -1,6 +1,6 @@
 ### Chef Boundary Annotations Handler
 
-This is a Chef handler for taking sucsessful changes and exceptions via Chef and create Boundary Annotations from them
+This is a Chef handler for taking successful changes and exceptions via Chef and create Boundary Annotations from them
 
 Append the following to your Chef client configs, usually at `/etc/chef/client.rb`
 
